@@ -17,7 +17,7 @@ import {
 } from './input.js';
 import { createAudio } from './audio.js';
 import {
-  createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE,
+  createRenderer, NEW_GAME_BUTTON, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE,
   SCREEN_WIN,
 } from './render.js';
 import { stageShot } from './shots.js';
@@ -105,6 +105,21 @@ function runGame() {
       const muted = audio.toggleMute();
       announce(muted ? 'Muted.' : 'Sound on.');
     }
+    // On the title screen, a click on the New Game button starts the game.
+    // The click is consumed here so it can never leak into play as a
+    // thrown coin; a click outside the button simply does nothing.
+    if (screen === SCREEN_TITLE) {
+      const click = input.takeClick();
+      if (click) {
+        const p = renderer.toView(click.x, click.y);
+        if (p.x >= NEW_GAME_BUTTON.x && p.x <= NEW_GAME_BUTTON.x + NEW_GAME_BUTTON.w
+          && p.y >= NEW_GAME_BUTTON.y && p.y <= NEW_GAME_BUTTON.y + NEW_GAME_BUTTON.h) {
+          audio.resume();
+          startGame();
+          return;
+        }
+      }
+    }
     if (actions & ACTION_RETRY && (screen === SCREEN_PLAY || screen === SCREEN_OVER || screen === SCREEN_WIN)) {
       startGame();
       return;
@@ -167,7 +182,7 @@ function runGame() {
     }
   });
 
-  announce('The Aurum Job. Press Space or click to start.');
+  announce('The Aurum Job. Press Space or click New Game to start.');
   requestAnimationFrame(frame);
 }
 

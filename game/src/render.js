@@ -17,6 +17,10 @@ export const SCREEN_PAUSED = 'paused';
 export const SCREEN_OVER = 'over';
 export const SCREEN_WIN = 'win';
 
+// The New Game button on the title screen, in view coordinates (1280x720).
+// main.js uses these bounds to tell whether a click hit the button.
+export const NEW_GAME_BUTTON = { x: 490, y: 352, w: 300, h: 68 };
+
 const TAU = Math.PI * 2;
 
 function cachedLabel(prefix) {
@@ -78,6 +82,22 @@ export function createRenderer(canvas) {
     context.beginPath();
     context.arc(x, y, r, 0, TAU);
     context.fill();
+  }
+
+  // A rounded-rectangle path (for the New Game button), drawn manually so
+  // it works in any canvas, not only in browsers with ctx.roundRect.
+  function roundRectPath(x, y, w, h, r) {
+    context.beginPath();
+    context.moveTo(x + r, y);
+    context.lineTo(x + w - r, y);
+    context.arcTo(x + w, y, x + w, y + r, r);
+    context.lineTo(x + w, y + h - r);
+    context.arcTo(x + w, y + h, x + w - r, y + h, r);
+    context.lineTo(x + r, y + h);
+    context.arcTo(x, y + h, x, y + h - r, r);
+    context.lineTo(x, y + r);
+    context.arcTo(x, y, x + r, y, r);
+    context.closePath();
   }
 
   // The same rgba colour with a different alpha, for gradients.
@@ -288,51 +308,103 @@ export function createRenderer(canvas) {
       context.beginPath();
       context.arc(item.x, item.y, 30 + 6 * pulse, 0, TAU);
       context.fill();
-      // The loot itself, drawn as its own icon.
+      // The loot itself, drawn as its own detailed icon.
       if (item.id === 'ledger') {
-        rect(item.x - 11, item.y - 14, 22, 28, '#7a1f2b');
-        rect(item.x - 8, item.y - 11, 16, 22, '#f5e6c4');
+        // A big ledger: crimson cover, cream pages, gold spine and clasp,
+        // ruled page lines, and a red ribbon bookmark.
+        rect(item.x - 15, item.y - 19, 30, 38, '#7a1f2b');
+        rect(item.x - 12, item.y - 16, 24, 32, '#f5e6c4');
         context.strokeStyle = PALETTE.loot;
         context.lineWidth = 2;
         context.beginPath();
-        context.moveTo(item.x - 4, item.y - 4);
-        context.lineTo(item.x + 4, item.y - 4);
-        context.moveTo(item.x - 4, item.y + 2);
-        context.lineTo(item.x + 4, item.y + 2);
+        context.moveTo(item.x - 13, item.y - 16);
+        context.lineTo(item.x - 13, item.y + 16);
         context.stroke();
-      } else if (item.id === 'crown') {
-        context.fillStyle = PALETTE.loot;
+        context.lineWidth = 1.5;
         context.beginPath();
-        context.moveTo(item.x - 14, item.y + 10);
-        context.lineTo(item.x - 14, item.y - 6);
-        context.lineTo(item.x - 7, item.y + 2);
-        context.lineTo(item.x, item.y - 12);
-        context.lineTo(item.x + 7, item.y + 2);
-        context.lineTo(item.x + 14, item.y - 6);
-        context.lineTo(item.x + 14, item.y + 10);
+        context.moveTo(item.x - 8, item.y - 8);
+        context.lineTo(item.x + 8, item.y - 8);
+        context.moveTo(item.x - 8, item.y);
+        context.lineTo(item.x + 8, item.y);
+        context.moveTo(item.x - 8, item.y + 8);
+        context.lineTo(item.x + 8, item.y + 8);
+        context.stroke();
+        // Gold clasp on the fore-edge.
+        rect(item.x + 13, item.y - 3, 4, 6, PALETTE.loot);
+        // Ribbon bookmark hanging from the bottom.
+        context.fillStyle = '#a4123f';
+        context.beginPath();
+        context.moveTo(item.x + 4, item.y + 19);
+        context.lineTo(item.x + 8, item.y + 19);
+        context.lineTo(item.x + 8, item.y + 26);
+        context.lineTo(item.x + 6, item.y + 23);
+        context.lineTo(item.x + 4, item.y + 26);
         context.closePath();
         context.fill();
-        rect(item.x - 14, item.y + 10, 28, 5, '#b8860b');
-      } else {
-        // Bullion: a stack of gold bars.
+      } else if (item.id === 'crown') {
+        // The Aurum Crown, bigger and jewelled, on a velvet cushion.
+        rect(item.x - 23, item.y + 14, 46, 9, '#7a1f2b');
+        context.strokeStyle = PALETTE.floorGoldBright;
+        context.lineWidth = 1.5;
+        context.strokeRect(item.x - 23, item.y + 14, 46, 9);
         context.fillStyle = PALETTE.loot;
-        for (const [bx, by, bw] of [[-13, 4, 26], [-9, -4, 18], [-4, -12, 10]]) {
+        context.beginPath();
+        context.moveTo(item.x - 20, item.y + 12);
+        context.lineTo(item.x - 20, item.y - 6);
+        context.lineTo(item.x - 14, item.y + 2);
+        context.lineTo(item.x - 10, item.y - 14);
+        context.lineTo(item.x - 5, item.y + 2);
+        context.lineTo(item.x, item.y - 18);
+        context.lineTo(item.x + 5, item.y + 2);
+        context.lineTo(item.x + 10, item.y - 14);
+        context.lineTo(item.x + 14, item.y + 2);
+        context.lineTo(item.x + 20, item.y - 6);
+        context.lineTo(item.x + 20, item.y + 12);
+        context.closePath();
+        context.fill();
+        rect(item.x - 20, item.y + 12, 40, 5, '#b8860b');
+        // Ruby gems set in the band, and a gold orb on the tallest point.
+        circle(item.x - 10, item.y + 6, 2.5, '#ff5a5a');
+        circle(item.x, item.y + 6, 2.5, '#ff5a5a');
+        circle(item.x + 10, item.y + 6, 2.5, '#ff5a5a');
+        circle(item.x, item.y - 20, 2.5, PALETTE.loot);
+      } else {
+        // Bullion: two rows of gold bars with highlights, and loose coins.
+        context.fillStyle = PALETTE.loot;
+        for (const [bx, by] of [[-16, 6], [0, 6], [16, 6], [-8, -2], [8, -2]]) {
           context.beginPath();
-          context.moveTo(item.x + bx, item.y + by + 8);
-          context.lineTo(item.x + bx + 3, item.y + by);
-          context.lineTo(item.x + bx + bw - 3, item.y + by);
-          context.lineTo(item.x + bx + bw, item.y + by + 8);
+          context.moveTo(item.x + bx - 8, item.y + by + 7);
+          context.lineTo(item.x + bx - 5, item.y + by);
+          context.lineTo(item.x + bx + 5, item.y + by);
+          context.lineTo(item.x + bx + 8, item.y + by + 7);
           context.closePath();
           context.fill();
+          // Highlight along the bar's top edge.
+          context.strokeStyle = '#fff3b0';
+          context.lineWidth = 1.5;
+          context.beginPath();
+          context.moveTo(item.x + bx - 5, item.y + by + 1);
+          context.lineTo(item.x + bx + 5, item.y + by + 1);
+          context.stroke();
+        }
+        // Loose coins beside the stack.
+        for (const [cx, cy] of [[-26, 14], [26, 14]]) {
+          circle(item.x + cx, item.y + cy, 4, PALETTE.loot);
+          context.strokeStyle = '#b8860b';
+          context.lineWidth = 1;
+          context.beginPath();
+          context.arc(item.x + cx, item.y + cy, 4, 0, TAU);
+          context.stroke();
         }
       }
-      // A small gold ring under the loot and its name.
+      // A gold ring under the loot and its name.
+      const ringR = item.id === 'crown' ? 32 : item.id === 'bullion' ? 30 : 28;
       context.strokeStyle = PALETTE.loot;
       context.lineWidth = 1.5;
       context.beginPath();
-      context.arc(item.x, item.y, 20, 0, TAU);
+      context.arc(item.x, item.y, ringR, 0, TAU);
       context.stroke();
-      text(item.name, item.x, item.y + 38, 12, PALETTE.hudGold, 'center');
+      text(item.name, item.x, item.y + 40, 12, PALETTE.hudGold, 'center');
     }
   }
 
@@ -347,9 +419,34 @@ export function createRenderer(canvas) {
         context.lineWidth = 1.5;
         context.stroke();
       }
-      // The dome on the wall.
-      circle(c.x, c.y, 11, PALETTE.cameraBody);
-      circle(c.x, c.y, 5, jammed ? PALETTE.hudDim : PALETTE.cameraLens);
+      // The wall mount: a fixed dark base on the wall.
+      circle(c.x, c.y, 9, PALETTE.cameraBody);
+      context.strokeStyle = PALETTE.wallTrim;
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.arc(c.x, c.y, 9, 0, TAU);
+      context.stroke();
+      // The camera itself, aiming along its sweep: a housing that turns
+      // with the lens, a red lens at the front, a gold screw on the body.
+      context.save();
+      context.translate(c.x, c.y);
+      context.rotate(c.angle);
+      context.fillStyle = PALETTE.cameraBody;
+      context.strokeStyle = PALETTE.wallTrim;
+      context.lineWidth = 1.5;
+      context.beginPath();
+      context.moveTo(-6, -6);
+      context.lineTo(10, -4);
+      context.lineTo(13, 0);
+      context.lineTo(10, 4);
+      context.lineTo(-6, 6);
+      context.closePath();
+      context.fill();
+      context.stroke();
+      circle(12, 0, 4, jammed ? PALETTE.hudDim : PALETTE.cameraLens);
+      circle(12, 0, 1.8, jammed ? PALETTE.hudDim : '#ff8a8a');
+      circle(-2, 0, 1.5, PALETTE.wallTrim);
+      context.restore();
       if (jammed) text('JAMMED', c.x, c.y + 26, 11, PALETTE.hudDim, 'center');
     }
   }
@@ -366,31 +463,110 @@ export function createRenderer(canvas) {
       context.strokeStyle = coneEdge;
       context.lineWidth = 1.5;
       context.stroke();
-      // Detection ring: how close this guard is to spotting the thief.
+      // Detection ring, outside the figure.
       if (g.detect > 0.05) {
         context.strokeStyle = alert ? PALETTE.hudRed : PALETTE.hudAmber;
         context.lineWidth = 3;
         context.beginPath();
-        context.arc(g.x, g.y, GUARD.radius + 7, -Math.PI / 2, -Math.PI / 2 + g.detect * TAU);
+        context.arc(g.x, g.y, GUARD.radius + 19, -Math.PI / 2, -Math.PI / 2 + g.detect * TAU);
         context.stroke();
       }
-      // The guard: a dark halo so he reads as a solid figure against his own
-      // cone, then a dark suit, gold trim and a facing tick.
-      circle(g.x, g.y, GUARD.radius + 7, 'rgba(7, 10, 18, 0.85)');
-      circle(g.x, g.y, GUARD.radius + 2, PALETTE.guardTrim);
-      circle(g.x, g.y, GUARD.radius, GUARD.guardSuit);
-      context.strokeStyle = PALETTE.guardFace;
+      // The guard as an upright three-quarter standing figure: big head
+      // with a face and peaked cap, uniformed torso, arms, legs. The body
+      // is drawn upright (head up, feet down) so it reads as a person at a
+      // glance; the facing direction is shown by the vision cone and by the
+      // flashlight, which points along g.face.
+      const fx = Math.cos(g.face);
+      const fy = Math.sin(g.face);
+      // Drop shadow under the feet.
+      context.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      context.beginPath();
+      context.ellipse(g.x, g.y + 24, 18, 7, 0, 0, TAU);
+      context.fill();
+      // Legs: two dark navy legs with shoes.
+      context.fillStyle = '#141a2e';
+      context.fillRect(g.x - 10, g.y + 10, 7, 12);
+      context.fillRect(g.x + 3, g.y + 10, 7, 12);
+      context.fillRect(g.x - 11, g.y + 20, 9, 4);
+      context.fillRect(g.x + 2, g.y + 20, 9, 4);
+      // Torso: navy uniform, wide shoulders, gold trim.
+      context.fillStyle = PALETTE.guardSuit;
+      context.strokeStyle = PALETTE.guardTrim;
+      context.lineWidth = 2;
+      context.beginPath();
+      context.ellipse(g.x, g.y + 2, 15, 11, 0, 0, TAU);
+      context.fill();
+      context.stroke();
+      // Gold belt across the waist.
+      context.strokeStyle = PALETTE.guardTrim;
       context.lineWidth = 3;
       context.beginPath();
-      context.moveTo(g.x, g.y);
-      context.lineTo(g.x + Math.cos(g.face) * (GUARD.radius + 5), g.y + Math.sin(g.face) * (GUARD.radius + 5));
+      context.moveTo(g.x - 14, g.y + 4);
+      context.lineTo(g.x + 14, g.y + 4);
       context.stroke();
-      circle(g.x, g.y, 4, PALETTE.guardFace);
-      // State mark: ? when suspicious, ! when alert.
+      // Epaulettes on the shoulders.
+      context.fillStyle = PALETTE.guardTrim;
+      context.fillRect(g.x - 14, g.y - 8, 7, 3);
+      context.fillRect(g.x + 7, g.y - 8, 7, 3);
+      // Badge: a gold diamond on the chest.
+      context.beginPath();
+      context.moveTo(g.x - 3, g.y - 2);
+      context.lineTo(g.x, g.y + 1);
+      context.lineTo(g.x + 3, g.y - 2);
+      context.lineTo(g.x, g.y - 5);
+      context.closePath();
+      context.fill();
+      // Arms from the shoulders down to the hands.
+      context.strokeStyle = PALETTE.guardSuit;
+      context.lineWidth = 5;
+      context.lineCap = 'round';
+      context.beginPath();
+      context.moveTo(g.x - 13, g.y - 4);
+      context.lineTo(g.x - 11, g.y + 10);
+      context.moveTo(g.x + 13, g.y - 4);
+      context.lineTo(g.x + 11, g.y + 10);
+      context.stroke();
+      context.lineCap = 'butt';
+      // Hands, with a gold cuff at each wrist so the arms read.
+      circle(g.x - 11, g.y + 10, 3.5, PALETTE.guardTrim);
+      circle(g.x + 11, g.y + 10, 3.5, PALETTE.guardTrim);
+      circle(g.x - 11, g.y + 10, 2.5, PALETTE.guardFace);
+      circle(g.x + 11, g.y + 10, 2.5, PALETTE.guardFace);
+      // Neck.
+      context.fillStyle = PALETTE.guardFace;
+      context.fillRect(g.x - 3, g.y - 12, 6, 6);
+      // Head: skin, with the peaked cap over the top half.
+      circle(g.x, g.y - 18, 11, PALETTE.guardFace);
+      context.fillStyle = PALETTE.guard;
+      context.beginPath();
+      context.arc(g.x, g.y - 18, 11, Math.PI, TAU);
+      context.fill();
+      // Gold cap band along the cap's lower edge.
+      context.strokeStyle = PALETTE.guardTrim;
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(g.x - 11, g.y - 18);
+      context.lineTo(g.x + 11, g.y - 18);
+      context.stroke();
+      // Face: two dark eyes on clean skin, below the cap band.
+      circle(g.x - 4, g.y - 9, 1.8, '#1a1206');
+      circle(g.x + 4, g.y - 9, 1.8, '#1a1206');
+      // Flashlight: held in the right hand, pointing along the facing direction.
+      context.strokeStyle = PALETTE.cameraBody;
+      context.lineWidth = 4;
+      context.lineCap = 'round';
+      context.beginPath();
+      context.moveTo(g.x + 11, g.y + 10);
+      context.lineTo(g.x + 11 + fx * 14, g.y + 10 + fy * 14);
+      context.stroke();
+      context.lineCap = 'butt';
+      circle(g.x + 11 + fx * 14, g.y + 10 + fy * 14, 2.5, '#fff8c9');
+      circle(g.x + 11 + fx * 14, g.y + 10 + fy * 14, 1.2, '#ffffff');
+      // State mark and name, clear of the figure.
       if (alert || suspicious) {
-        text(alert ? '!' : '?', g.x, g.y - GUARD.radius - 10, 22, alert ? PALETTE.hudRed : PALETTE.hudAmber, 'center');
+        text(alert ? '!' : '?', g.x, g.y - GUARD.radius - 26, 22, alert ? PALETTE.hudRed : PALETTE.hudAmber, 'center');
       }
-      text(g.name, g.x, g.y + GUARD.radius + 16, 11, PALETTE.hudDim, 'center');
+      text(g.name, g.x, g.y + GUARD.radius + 26, 11, PALETTE.hudDim, 'center');
     }
   }
 
@@ -410,24 +586,110 @@ export function createRenderer(canvas) {
     context.strokeStyle = PALETTE.thiefRing;
     context.lineWidth = 3;
     context.beginPath();
-    context.arc(t.x, t.y, t.r + 5, 0, TAU);
+    context.arc(t.x, t.y, t.r + 20, 0, TAU);
     context.stroke();
-    circle(t.x, t.y, t.r, PALETTE.thiefDark);
-    circle(t.x, t.y, t.r - 3, PALETTE.thief);
-    // Facing tick.
-    context.strokeStyle = '#e6fffa';
-    context.lineWidth = 3;
+    // The thief as an upright three-quarter hooded figure: big hooded head
+    // with a face, cloaked torso, arms, legs, and a loot sack slung over
+    // one shoulder. The body is drawn upright (head up, feet down) so it
+    // reads as a person at a glance; the facing direction is the vision
+    // cone's, and the figure turns with it only in the sense that the game
+    // moves it that way.
+    // Drop shadow under the feet.
+    context.fillStyle = 'rgba(0, 0, 0, 0.35)';
     context.beginPath();
-    context.moveTo(t.x, t.y);
-    context.lineTo(t.x + Math.cos(t.face) * (t.r + 4), t.y + Math.sin(t.face) * (t.r + 4));
+    context.ellipse(t.x, t.y + 24, 18, 7, 0, 0, TAU);
+    context.fill();
+    // Legs: two dark teal legs with shoes.
+    context.fillStyle = '#0a4f4a';
+    context.fillRect(t.x - 10, t.y + 10, 7, 12);
+    context.fillRect(t.x + 3, t.y + 10, 7, 12);
+    context.fillRect(t.x - 11, t.y + 20, 9, 4);
+    context.fillRect(t.x + 2, t.y + 20, 9, 4);
+    // Cloak: dark teal, wide shoulders, light teal trim.
+    context.fillStyle = PALETTE.thiefDark;
+    context.strokeStyle = PALETTE.thief;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.ellipse(t.x, t.y + 2, 15, 11, 0, 0, TAU);
+    context.fill();
     context.stroke();
+    // Cloak seam down the front.
+    context.strokeStyle = '#0a4f4a';
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(t.x, t.y - 8);
+    context.lineTo(t.x, t.y + 10);
+    context.stroke();
+    // Gold clasp at the cloak's neck.
+    circle(t.x, t.y - 6, 2, PALETTE.loot);
+    // Arms from the shoulders down to the hands.
+    context.strokeStyle = PALETTE.thiefDark;
+    context.lineWidth = 5;
+    context.lineCap = 'round';
+    context.beginPath();
+    context.moveTo(t.x - 13, t.y - 4);
+    context.lineTo(t.x - 11, t.y + 10);
+    context.moveTo(t.x + 13, t.y - 4);
+    context.lineTo(t.x + 11, t.y + 10);
+    context.stroke();
+    context.lineCap = 'butt';
+    circle(t.x - 11, t.y + 10, 2.5, PALETTE.thiefDark);
+    circle(t.x + 11, t.y + 10, 2.5, PALETTE.thiefDark);
+    // Loot sack slung over the left shoulder: a bulging tan sack with a
+    // tied top and a strap to the torso, coins peeking out.
+    context.strokeStyle = '#5c4517';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(t.x - 15, t.y - 6);
+    context.lineTo(t.x - 6, t.y + 0);
+    context.stroke();
+    context.fillStyle = '#8a6a2f';
+    context.strokeStyle = '#5c4517';
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.ellipse(t.x - 17, t.y - 6, 7, 6, -0.4, 0, TAU);
+    context.fill();
+    context.stroke();
+    // Tied top of the sack.
+    context.fillStyle = '#5c4517';
+    context.beginPath();
+    context.moveTo(t.x - 22, t.y - 10);
+    context.lineTo(t.x - 19, t.y - 13);
+    context.lineTo(t.x - 17, t.y - 9);
+    context.closePath();
+    context.fill();
+    // Coins peeking from the sack.
+    circle(t.x - 19, t.y - 9, 1.8, PALETTE.loot);
+    circle(t.x - 16, t.y - 10, 1.8, PALETTE.loot);
+    // Neck.
+    context.fillStyle = '#d9a066';
+    context.fillRect(t.x - 3, t.y - 12, 6, 6);
+    // Hood: a large dark-teal hood around a skin face, with a peaked tip.
+    context.fillStyle = PALETTE.thiefDark;
+    context.beginPath();
+    context.moveTo(t.x - 5, t.y - 28);
+    context.lineTo(t.x, t.y - 34);
+    context.lineTo(t.x + 5, t.y - 28);
+    context.closePath();
+    context.fill();
+    circle(t.x, t.y - 19, 11, PALETTE.thiefDark);
+    context.strokeStyle = PALETTE.thief;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(t.x, t.y - 19, 11, 0, TAU);
+    context.stroke();
+    // Face: warm skin inside the hood.
+    circle(t.x, t.y - 17, 7, '#d9a066');
+    // Two dark eyes, high contrast on the skin.
+    circle(t.x - 3, t.y - 18, 1.6, '#1a1206');
+    circle(t.x + 3, t.y - 18, 1.6, '#1a1206');
     context.restore();
-    // Grab progress ring.
+    // Grab progress ring, outside the figure.
     if (t.grabbing) {
       context.strokeStyle = PALETTE.loot;
       context.lineWidth = 4;
       context.beginPath();
-      context.arc(t.x, t.y, t.r + 11, -Math.PI / 2, -Math.PI / 2 + t.grabProgress * TAU);
+      context.arc(t.x, t.y, t.r + 24, -Math.PI / 2, -Math.PI / 2 + t.grabProgress * TAU);
       context.stroke();
     }
     // Grace blink after being caught.
@@ -435,7 +697,7 @@ export function createRenderer(canvas) {
       context.strokeStyle = 'rgba(255,255,255,0.7)';
       context.lineWidth = 2;
       context.beginPath();
-      context.arc(t.x, t.y, t.r + 9, 0, TAU);
+      context.arc(t.x, t.y, t.r + 22, 0, TAU);
       context.stroke();
     }
   }
@@ -554,6 +816,60 @@ export function createRenderer(canvas) {
     );
   }
 
+  // Title screen: dark, like the original. A full-screen dark overlay
+  // (82% opaque) dims the room behind it, and the game name sits above a
+  // yellow New Game button with black text — the name and the button are
+  // the focus. One small instruction line sits under the button.
+  function drawTitle(best) {
+    // Dark overlay over the whole view, so the room is only dimly visible.
+    rect(0, 0, VIEW_W, VIEW_H, 'rgba(7, 10, 18, 0.82)');
+
+    // Game name, large and gold, above the button.
+    text('THE AURUM JOB', VIEW_W / 2, 300, 64, PALETTE.hudGold, 'center');
+    // A thin gold rule under the name, with diamond ornaments at the ends.
+    context.strokeStyle = PALETTE.hudGold;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(480, 322);
+    context.lineTo(800, 322);
+    context.stroke();
+    for (const dx of [480, 800]) {
+      context.save();
+      context.translate(dx, 322);
+      context.rotate(Math.PI / 4);
+      context.fillStyle = PALETTE.hudGold;
+      context.fillRect(-4, -4, 8, 8);
+      context.restore();
+    }
+
+    // New Game button: yellow background, black text, centred below the name.
+    const b = NEW_GAME_BUTTON;
+    roundRectPath(b.x, b.y, b.w, b.h, 10);
+    context.fillStyle = PALETTE.loot;
+    context.fill();
+    context.strokeStyle = '#b8860b';
+    context.lineWidth = 2;
+    context.stroke();
+    // A darker bottom edge so the button reads as raised.
+    context.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+    context.lineWidth = 4;
+    context.beginPath();
+    context.moveTo(b.x + 10, b.y + b.h - 2);
+    context.lineTo(b.x + b.w - 10, b.y + b.h - 2);
+    context.stroke();
+    text('New Game', b.x + b.w / 2, b.y + b.h / 2, 26, '#000000', 'center', 'middle');
+
+    // One small instruction line under the button, then the Space hint.
+    text(
+      'Steal the Ledger, the Aurum Crown and the Bullion — past three guards, two cameras and the lasers — then vanish through the green doors.',
+      VIEW_W / 2, 462, 15, PALETTE.hudText, 'center',
+    );
+    text('or press Space', VIEW_W / 2, 490, 14, PALETTE.hudDim, 'center');
+    if (best > 0) {
+      text(bestLabel(best), VIEW_W / 2, 518, 14, PALETTE.hudDim, 'center');
+    }
+  }
+
   function drawPanel(title, lines, prompt, accent) {
     const width = 640;
     const height = 150 + lines.length * 32;
@@ -599,12 +915,7 @@ export function createRenderer(canvas) {
       context.fillRect(0, 0, VIEW_W, VIEW_H);
     }
     if (screen === SCREEN_TITLE) {
-      drawPanel('THE AURUM JOB', [
-        'Steal the Ledger, the Aurum Crown and the Bullion —',
-        'past three guards, two cameras and the lasers —',
-        'then vanish through the green doors.',
-        best > 0 ? bestLabel(best) : '',
-      ].filter(Boolean), 'Press Space or click to start', PALETTE.hudGold);
+      drawTitle(best);
     } else if (screen === SCREEN_PAUSED) {
       drawPanel('Paused', ['The vault waits for you.'], 'Press P to resume', PALETTE.hudText);
     } else if (screen === SCREEN_WIN) {
@@ -621,7 +932,13 @@ export function createRenderer(canvas) {
     }
   }
 
+  // Convert a point in canvas device pixels (what input.js reports for a
+  // click) to view coordinates (1280x720), for hit-testing the New Game button.
+  function toView(canvasX, canvasY) {
+    return { x: (canvasX - view.x) / view.scale, y: (canvasY - view.y) / view.scale };
+  }
+
   resize();
   window.addEventListener('resize', resize);
-  return { draw };
+  return { draw, toView };
 }

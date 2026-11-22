@@ -1,7 +1,9 @@
-// THE AURUM JOB — the world: game state and one fixed step of simulation.
-// Pure logic, no drawing and no sound: the autopilot and the live game step
-// the same world. Guards patrol, grow suspicious, then chase; cameras sweep
-// and raise HEAT; lasers pulse; tools cost their count; HEAT is the alarm.
+// THE AURUM JOB — the simulation core: state plus one fixed update step.
+// No drawing, no sound here. The live game and the screenshot autopilot run
+// the same update, so a frame is always the real rules at work. Watchmen
+// walk their beats, grow wary, then give chase; wall domes sweep and push
+// the alarm meter up; light beams blink on and off; kit items cost a use;
+// the alarm meter is the thing that ends a run.
 
 import {
   CAMERA, GRACE_SECONDS, GUARD, HALL, HEAT, LASER, LOOT, SCORE,
@@ -23,42 +25,42 @@ export const EVENT_SPOTTED = 32;
 export const EVENT_LASER = 64;
 export const EVENT_TOOL = 128;
 
-function clamp(v, lo, hi) {
+function bound(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-function angleDiff(a, b) {
+function angDelta(a, b) {
   let d = a - b;
   while (d > Math.PI) d -= TAU;
   while (d < -Math.PI) d += TAU;
   return d;
 }
 
-function dist(x1, y1, x2, y2) {
+function gap(x1, y1, x2, y2) {
   return Math.hypot(x2 - x1, y2 - y1);
 }
 
-function pointInRect(x, y, r) {
+function insideRect(x, y, r) {
   return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 }
 
-function pointInCircle(x, y, c) {
-  return dist(x, y, c.x, c.y) <= c.r;
+function insideCircle(x, y, c) {
+  return gap(x, y, c.x, c.y) <= c.r;
 }
 
-// Does the segment (x1,y1)-(x2,y2) cross the rectangle? (Either end inside,
-// or it cuts one of the four edges.)
-function segmentHitsRect(x1, y1, x2, y2, r) {
-  if (pointInRect(x1, y1, r) || pointInRect(x2, y2, r)) return true;
+// Does the run from (x1,y1) to (x2,y2) meet the rectangle? True when an end
+// sits inside it, or when the run cuts any of its four sides.
+function segHitsRect(x1, y1, x2, y2, r) {
+  if (insideRect(x1, y1, r) || insideRect(x2, y2, r)) return true;
   return (
-    segmentsCross(x1, y1, x2, y2, r.x, r.y, r.x + r.w, r.y) ||
-    segmentsCross(x1, y1, x2, y2, r.x + r.w, r.y, r.x + r.w, r.y + r.h) ||
-    segmentsCross(x1, y1, x2, y2, r.x + r.w, r.y + r.h, r.x, r.y + r.h) ||
-    segmentsCross(x1, y1, x2, y2, r.x, r.y + r.h, r.x, r.y)
+    segsCross(x1, y1, x2, y2, r.x, r.y, r.x + r.w, r.y) ||
+    segsCross(x1, y1, x2, y2, r.x + r.w, r.y, r.x + r.w, r.y + r.h) ||
+    segsCross(x1, y1, x2, y2, r.x + r.w, r.y + r.h, r.x, r.y + r.h) ||
+    segsCross(x1, y1, x2, y2, r.x, r.y + r.h, r.x, r.y)
   );
 }
 
-function segmentsCross(x1, y1, x2, y2, x3, y3, x4, y4) {
+function segsCross(x1, y1, x2, y2, x3, y3, x4, y4) {
   const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
   if (d === 0) return false;
   const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d;
@@ -66,27 +68,27 @@ function segmentsCross(x1, y1, x2, y2, x3, y3, x4, y4) {
   return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 }
 
-// Does the segment pass within the circle? (Distance from the centre to the
-// segment, against the radius.)
-function segmentHitsCircle(x1, y1, x2, y2, c) {
+// Does the run pass close enough to the circle's middle to touch it? (How
+// far the middle sits from the run, measured against the radius.)
+function segHitsCircle(x1, y1, x2, y2, c) {
   const dx = x2 - x1;
   const dy = y2 - y1;
   const len2 = dx * dx + dy * dy;
   let t = len2 === 0 ? 0 : ((c.x - x1) * dx + (c.y - y1) * dy) / len2;
-  t = clamp(t, 0, 1);
-  return dist(x1 + dx * t, y1 + dy * t, c.x, c.y) <= c.r;
+  t = bound(t, 0, 1);
+  return gap(x1 + dx * t, y1 + dy * t, c.x, c.y) <= c.r;
 }
 
-// Push a circle (x, y, r) out of a rectangle it overlaps. Returns true if it moved.
-function pushOutOfRect(body, r) {
-  const closestX = clamp(body.x, r.x, r.x + r.w);
-  const closestY = clamp(body.y, r.y, r.y + r.h);
+// Shove a round body (x, y, r) out of a rectangle it overlaps. True when moved.
+function shoveRect(body, r) {
+  const closestX = bound(body.x, r.x, r.x + r.w);
+  const closestY = bound(body.y, r.y, r.y + r.h);
   const dx = body.x - closestX;
   const dy = body.y - closestY;
   const d2 = dx * dx + dy * dy;
   if (d2 >= body.r * body.r) return false;
   if (d2 === 0) {
-    // Centre inside the rectangle: push out along the shortest side.
+    // Middle inside the rectangle: leave by the nearest side.
     const left = body.x - r.x;
     const right = r.x + r.w - body.x;
     const top = body.y - r.y;
@@ -104,7 +106,7 @@ function pushOutOfRect(body, r) {
   return true;
 }
 
-function pushOutOfCircle(body, c) {
+function shoveCircle(body, c) {
   const dx = body.x - c.x;
   const dy = body.y - c.y;
   const d = Math.hypot(dx, dy);
@@ -115,9 +117,9 @@ function pushOutOfCircle(body, c) {
   return true;
 }
 
-// Is the point inside a shadow zone (detection is slower there)?
-function inShadow(x, y) {
-  for (const s of SHADOWS) if (pointInRect(x, y, s)) return true;
+// Is the point in a dim pocket (spotting is slower there)?
+function inShade(x, y) {
+  for (const s of SHADOWS) if (insideRect(x, y, s)) return true;
   return false;
 }
 
@@ -202,34 +204,34 @@ export function createWorld(random) {
     state.winBreakdown = '';
   }
 
-  // True when nothing solid stands between the two points. Smoke also blocks
-  // sight: a segment through a smoke cloud sees nothing past it.
+  // True when nothing solid sits between the two points. A smoke puff also
+  // cuts sight: a run through a puff sees nothing beyond it.
   function hasLineOfSight(x1, y1, x2, y2) {
-    for (const w of WALLS) if (segmentHitsRect(x1, y1, x2, y2, w)) return false;
-    for (const p of PILLARS) if (segmentHitsCircle(x1, y1, x2, y2, p)) return false;
-    for (const c of CASES) if (segmentHitsRect(x1, y1, x2, y2, c)) return false;
-    for (const s of smokes) if (segmentHitsCircle(x1, y1, x2, y2, { x: s.x, y: s.y, r: s.r })) return false;
+    for (const w of WALLS) if (segHitsRect(x1, y1, x2, y2, w)) return false;
+    for (const p of PILLARS) if (segHitsCircle(x1, y1, x2, y2, p)) return false;
+    for (const c of CASES) if (segHitsRect(x1, y1, x2, y2, c)) return false;
+    for (const s of smokes) if (segHitsCircle(x1, y1, x2, y2, { x: s.x, y: s.y, r: s.r })) return false;
     return true;
   }
 
   function moveBody(body, dx, dy, solidDais) {
     body.x += dx;
     body.y += dy;
-    for (const w of WALLS) pushOutOfRect(body, w);
-    for (const p of PILLARS) pushOutOfCircle(body, p);
-    for (const c of CASES) pushOutOfRect(body, c);
-    // The dais is a raised platform: the thief steps onto it to take the
-    // crown, but the watch walks around it.
-    if (solidDais) pushOutOfRect(body, DAIS);
-    body.x = clamp(body.x, HALL.x + body.r, HALL.x + HALL.w - body.r);
-    body.y = clamp(body.y, HALL.y + body.r, HALL.y + HALL.h - body.r);
+    for (const w of WALLS) shoveRect(body, w);
+    for (const p of PILLARS) shoveCircle(body, p);
+    for (const c of CASES) shoveRect(body, c);
+    // The dais is a raised stand: the thief climbs on it to lift the crown,
+    // while the watch walks around it.
+    if (solidDais) shoveRect(body, DAIS);
+    body.x = bound(body.x, HALL.x + body.r, HALL.x + HALL.w - body.r);
+    body.y = bound(body.y, HALL.y + body.r, HALL.y + HALL.h - body.r);
   }
 
   function inCone(ox, oy, face, range, halfAngle, tx, ty) {
-    const d = dist(ox, oy, tx, ty);
+    const d = gap(ox, oy, tx, ty);
     if (d > range) return false;
     if (d < 1) return true;
-    return Math.abs(angleDiff(Math.atan2(ty - oy, tx - ox), face)) <= halfAngle;
+    return Math.abs(angDelta(Math.atan2(ty - oy, tx - ox), face)) <= halfAngle;
   }
 
   function strike(reason) {
@@ -240,7 +242,7 @@ export function createWorld(random) {
     state.ghost = false;
     thief.grabProgress = 0;
     thief.grabbing = null;
-    // The guard drags the thief back to the doors; the room resets its watch.
+    // The watch hauls the thief back to the doors; the room settles again.
     thief.x = START.x;
     thief.y = START.y;
     thief.grace = GRACE_SECONDS;
@@ -280,9 +282,9 @@ export function createWorld(random) {
   }
 
   /**
-   * One fixed step. `move` is {x, y} (a unit-ish direction), `sneak` and
-   * `sprint` are held keys, `grab` is E held, `coin` is a click point or null,
-   * `smoke`/`jam` are one-shot actions. Returns event flags.
+   * A single fixed update. `move` is {x, y} (a roughly unit direction),
+   * `sneak` and `sprint` are held keys, `grab` is E held, `coin` is a click
+   * point or null, `smoke`/`jam` are one-shot actions. Returns event flags.
    */
   function step(dt, move, sneak, sprint, grab, coin, smoke, jam) {
     let events = 0;
@@ -313,12 +315,12 @@ export function createWorld(random) {
     }
     if (thief.grace > 0) thief.grace = Math.max(0, thief.grace - dt);
 
-    // Smoke clouds fade.
+    // Smoke puffs thin out.
     for (let i = smokes.length - 1; i >= 0; i -= 1) {
       smokes[i].left -= dt;
       if (smokes[i].left <= 0) smokes.splice(i, 1);
     }
-    // Coins fly to their target, then clink and draw the nearest guard.
+    // Coins arc to their mark, then clink and pull the nearest watchman over.
     for (let i = coins.length - 1; i >= 0; i -= 1) {
       const c = coins[i];
       if (!c.landed) {
@@ -330,7 +332,7 @@ export function createWorld(random) {
           let best = null;
           let bestD = TOOLS.coinHearRadius;
           for (const g of guards) {
-            const d = dist(g.x, g.y, c.x, c.y);
+            const d = gap(g.x, g.y, c.x, c.y);
             if (d < bestD) {
               bestD = d;
               best = g;
@@ -359,22 +361,22 @@ export function createWorld(random) {
       l.on = local < LASER.onFraction;
       if (l.cooldown > 0) l.cooldown -= dt;
       if (l.on && l.cooldown <= 0) {
-        // The thief's circle crossing the beam segment.
+        // The thief's circle crossing the beam run.
         const dx = 0;
         const dy = l.y2 - l.y1;
         const len2 = dy * dy;
         let t = len2 === 0 ? 0 : ((thief.x - l.x) * dx + (thief.y - l.y1) * dy) / len2;
-        t = clamp(t, 0, 1);
-        const d = dist(thief.x, thief.y, l.x, l.y1 + dy * t);
+        t = bound(t, 0, 1);
+        const d = gap(thief.x, thief.y, l.x, l.y1 + dy * t);
         if (d < thief.r + 3) {
           l.cooldown = 0.6;
           state.heat = Math.min(HEAT.max, state.heat + LASER.heatOnCross);
           events |= EVENT_LASER;
-          // The zap draws the nearest guard to the dais.
+          // The zap pulls the nearest watchman toward the dais.
           let best = null;
           let bestD = Infinity;
           for (const g of guards) {
-            const gd = dist(g.x, g.y, l.x, l.y1 + dy * t);
+            const gd = gap(g.x, g.y, l.x, l.y1 + dy * t);
             if (gd < bestD) {
               bestD = gd;
               best = g;
@@ -414,7 +416,7 @@ export function createWorld(random) {
         thief.grace === 0 &&
         inCone(g.x, g.y, g.face, GUARD.visionRange, GUARD.visionHalfAngle, thief.x, thief.y) &&
         hasLineOfSight(g.x, g.y, thief.x, thief.y);
-      const shadow = inShadow(thief.x, thief.y);
+      const shadow = inShade(thief.x, thief.y);
       if (sees) {
         const rate = (sneak ? GUARD.detectSneak : sprint ? GUARD.detectSprint : GUARD.detectWalk) * (shadow ? GUARD.detectShadow : 1);
         g.detect = Math.min(1, g.detect + rate * dt);
@@ -438,8 +440,8 @@ export function createWorld(random) {
         g.investigateTimer = GUARD.investigateSeconds;
       }
 
-      // Sprint noise draws a nearby patrol guard to the sound.
-      if (state.elapsed < state.noiseUntil && g.state === 'patrol' && dist(g.x, g.y, state.noiseX, state.noiseY) < 260) {
+      // A sprint's racket pulls a nearby patrolling watchman toward the sound.
+      if (state.elapsed < state.noiseUntil && g.state === 'patrol' && gap(g.x, g.y, state.noiseX, state.noiseY) < 260) {
         g.state = 'investigate';
         g.lastSeenX = state.noiseX;
         g.lastSeenY = state.noiseY;
@@ -449,7 +451,7 @@ export function createWorld(random) {
       // Move by state.
       if (g.state === 'patrol') {
         const target = g.waypoints[g.waypoint];
-        const d = dist(g.x, g.y, target[0], target[1]);
+        const d = gap(g.x, g.y, target[0], target[1]);
         if (d < 6) {
           g.waypoint = (g.waypoint + 1) % g.waypoints.length;
         } else {
@@ -459,10 +461,10 @@ export function createWorld(random) {
           moveBody(g, nx * GUARD.patrolSpeed * dt, ny * GUARD.patrolSpeed * dt, true);
         }
       } else if (g.state === 'investigate') {
-        const d = dist(g.x, g.y, g.lastSeenX, g.lastSeenY);
+        const d = gap(g.x, g.y, g.lastSeenX, g.lastSeenY);
         if (d < 10) {
           g.investigateTimer -= dt;
-          // Look around while searching.
+          // Scan the room while hunting.
           g.face += dt * 1.6;
           if (g.investigateTimer <= 0) {
             g.state = 'patrol';
@@ -475,7 +477,7 @@ export function createWorld(random) {
           moveBody(g, nx * GUARD.investigateSpeed * dt, ny * GUARD.investigateSpeed * dt, true);
         }
       } else if (g.state === 'chase') {
-        const d = dist(g.x, g.y, thief.x, thief.y);
+        const d = gap(g.x, g.y, thief.x, thief.y);
         if (d > 1) {
           const nx = (thief.x - g.x) / d;
           const ny = (thief.y - g.y) / d;
@@ -489,14 +491,14 @@ export function createWorld(random) {
           g.chaseTimer = 0;
         }
         anyAlert = true;
-        // Caught: a chasing guard touches the thief.
-        if (thief.grace === 0 && dist(g.x, g.y, thief.x, thief.y) < GUARD.touchDistance) {
+        // Caught: a chasing watchman lays a hand on the thief.
+        if (thief.grace === 0 && gap(g.x, g.y, thief.x, thief.y) < GUARD.touchDistance) {
           return events | strike('caught');
         }
       }
     }
 
-    // HEAT: an alert guard drives it up fast; otherwise it cools off.
+    // HEAT: a chasing watchman drives it up fast; otherwise it cools down.
     if (anyAlert) state.heat = Math.min(HEAT.max, state.heat + HEAT.guardAlertPerSecond * dt);
     else if (!cameraSees) state.heat = Math.max(0, state.heat - HEAT.falloffPerSecond * dt);
 
@@ -506,7 +508,7 @@ export function createWorld(random) {
     }
 
     // --- loot ------------------------------------------------------------
-    const nearLoot = loot.find((item) => !item.taken && dist(thief.x, thief.y, item.x, item.y) < 46);
+    const nearLoot = loot.find((item) => !item.taken && gap(thief.x, thief.y, item.x, item.y) < 46);
     if (grab && nearLoot && thief.grace === 0) {
       if (thief.grabbing !== nearLoot.id) {
         thief.grabbing = nearLoot.id;
@@ -528,7 +530,7 @@ export function createWorld(random) {
     // --- win ---------------------------------------------------------------
     const allLoot = loot.every((item) => item.taken);
     const locked = state.elapsed < state.lockdownUntil;
-    if (allLoot && !locked && pointInRect(thief.x, thief.y, EXIT)) {
+    if (allLoot && !locked && insideRect(thief.x, thief.y, EXIT)) {
       state.won = true;
       const timeBonus = Math.max(0, Math.round(SCORE.timeBonusMax * (1 - state.elapsed / SCORE.timeBonusSeconds)));
       const ghostBonus = state.ghost ? SCORE.ghostBonus : 0;
@@ -540,8 +542,8 @@ export function createWorld(random) {
   }
 
   reset();
-  // How dangerous a point is right now: 1 in a guard's cone with sight, 0.7
-  // in a camera's cone with sight, 0.5 on a live laser beam, 0 otherwise.
+  // How risky a point is right now: 1 inside a watchman's cone with sight,
+  // 0.7 inside a dome's cone with sight, 0.5 on a live beam, 0 otherwise.
   // The screenshot autopilot steers by it; the live game never calls it.
   function threatAt(x, y) {
     let threat = 0;

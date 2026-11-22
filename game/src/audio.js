@@ -1,13 +1,13 @@
-// Sound, synthesized with WebAudio — no audio files, nothing over the
-// network. A soft step, a coin clink, a loot chime, an alarm whoop and a
-// getaway fanfare, all from one oscillator helper. Mute with M.
+// Sound, built live with WebAudio — no sound files, nothing over the wire.
+// A soft footfall, a coin clink, a prize chime, an alarm whoop and a getaway
+// fanfare, all from a single oscillator helper. Mute with M.
 
 export function createAudio() {
   let context = null;
   let muted = false;
-  let stepTimer = 0;
+  let stepClock = 0;
 
-  function ensure() {
+  function getCtx() {
     if (context) return context;
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -18,9 +18,9 @@ export function createAudio() {
     return context;
   }
 
-  function tone(freq, seconds, type, gain, when, slideTo) {
+  function beep(freq, seconds, type, gain, when, slideTo) {
     if (muted) return;
-    const ctx = ensure();
+    const ctx = getCtx();
     if (!ctx) return;
     const start = ctx.currentTime + (when ?? 0);
     const osc = ctx.createOscillator();
@@ -38,7 +38,7 @@ export function createAudio() {
   }
 
   function resume() {
-    const ctx = ensure();
+    const ctx = getCtx();
     if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   }
 
@@ -51,40 +51,40 @@ export function createAudio() {
       muted = !muted;
       return muted;
     },
-    // A quiet step while moving; softer and slower while sneaking.
+    // A hushed footfall while moving; softer and slower while sneaking.
     step(sneaking, dt) {
-      stepTimer -= dt;
-      if (stepTimer > 0) return;
-      stepTimer = sneaking ? 0.42 : 0.28;
-      tone(sneaking ? 190 : 150, 0.05, 'triangle', sneaking ? 0.015 : 0.03);
+      stepClock -= dt;
+      if (stepClock > 0) return;
+      stepClock = sneaking ? 0.42 : 0.28;
+      beep(sneaking ? 190 : 150, 0.05, 'triangle', sneaking ? 0.015 : 0.03);
     },
     coin() {
-      tone(1568, 0.09, 'sine', 0.08);
-      tone(2093, 0.14, 'sine', 0.06, 0.07);
+      beep(1568, 0.09, 'sine', 0.08);
+      beep(2093, 0.14, 'sine', 0.06, 0.07);
     },
     loot() {
-      tone(880, 0.12, 'sine', 0.09);
-      tone(1318, 0.16, 'sine', 0.08, 0.09);
-      tone(1760, 0.22, 'sine', 0.07, 0.18);
+      beep(880, 0.12, 'sine', 0.09);
+      beep(1318, 0.16, 'sine', 0.08, 0.09);
+      beep(1760, 0.22, 'sine', 0.07, 0.18);
     },
     alarm() {
-      tone(620, 0.22, 'sawtooth', 0.07, 0, 940);
-      tone(620, 0.22, 'sawtooth', 0.07, 0.24, 940);
+      beep(620, 0.22, 'sawtooth', 0.07, 0, 940);
+      beep(620, 0.22, 'sawtooth', 0.07, 0.24, 940);
     },
     laser() {
-      tone(220, 0.12, 'square', 0.05, 0, 90);
+      beep(220, 0.12, 'square', 0.05, 0, 90);
     },
     spotted() {
-      tone(440, 0.1, 'square', 0.05);
-      tone(587, 0.14, 'square', 0.05, 0.1);
+      beep(440, 0.1, 'square', 0.05);
+      beep(587, 0.14, 'square', 0.05, 0.1);
     },
     win() {
       const notes = [523, 659, 784, 1046, 1318];
-      notes.forEach((freq, index) => tone(freq, 0.22, 'triangle', 0.09, index * 0.11));
+      notes.forEach((freq, index) => beep(freq, 0.22, 'triangle', 0.09, index * 0.11));
     },
     lose() {
-      tone(392, 0.25, 'triangle', 0.08, 0, 196);
-      tone(311, 0.4, 'triangle', 0.08, 0.22, 155);
+      beep(392, 0.25, 'triangle', 0.08, 0, 196);
+      beep(311, 0.4, 'triangle', 0.08, 0.22, 155);
     },
   };
 }
